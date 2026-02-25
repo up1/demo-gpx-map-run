@@ -182,27 +182,52 @@
             waypointMarkers = [];
         }
 
-        // Function to parse GPX XML
+        // Function to parse GPX XML (supports wpt, rtept, and trkpt formats)
         function parseGPX(xmlText) {
             const parser = new DOMParser();
             const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
 
-            // Get waypoints
+            // Get metadata name
+            const metadataName = xmlDoc.querySelector('metadata > name')?.textContent || '';
+
+            // Get waypoints (<wpt>)
             const waypoints = Array.from(xmlDoc.getElementsByTagName('wpt')).map(wpt => ({
                 lat: parseFloat(wpt.getAttribute('lat')),
                 lon: parseFloat(wpt.getAttribute('lon')),
+                ele: parseFloat(wpt.querySelector('ele')?.textContent || 0),
                 name: wpt.querySelector('name')?.textContent || '',
                 type: wpt.querySelector('type')?.textContent || ''
             }));
 
-            // Get route points
+            // Get route points (<rtept>)
             const routePoints = Array.from(xmlDoc.getElementsByTagName('rtept')).map(rtept => ({
                 lat: parseFloat(rtept.getAttribute('lat')),
                 lon: parseFloat(rtept.getAttribute('lon')),
                 ele: parseFloat(rtept.querySelector('ele')?.textContent || 0)
             }));
 
-            return { waypoints, routePoints };
+            // Get track points (<trk> -> <trkseg> -> <trkpt>)
+            const tracks = [];
+            const trkElements = xmlDoc.getElementsByTagName('trk');
+            for (const trk of trkElements) {
+                const trackName = trk.querySelector('name')?.textContent || '';
+                const segments = [];
+                const trksegElements = trk.getElementsByTagName('trkseg');
+                for (const trkseg of trksegElements) {
+                    const points = Array.from(trkseg.getElementsByTagName('trkpt')).map(trkpt => ({
+                        lat: parseFloat(trkpt.getAttribute('lat')),
+                        lon: parseFloat(trkpt.getAttribute('lon')),
+                        ele: parseFloat(trkpt.querySelector('ele')?.textContent || 0)
+                    }));
+                    segments.push(points);
+                }
+                tracks.push({ name: trackName, segments });
+            }
+
+            // Flatten all track points into a single array for distance/display
+            const trackPoints = tracks.flatMap(t => t.segments.flat());
+
+            return { metadataName, waypoints, routePoints, tracks, trackPoints };
         }
 
         // Calculate distance between two points (Haversine formula)
@@ -244,15 +269,26 @@
             fetch(`/api/gpx/${filename}`)
                 .then(response => response.text())
                 .then(gpxData => {
-                    const { waypoints, routePoints } = parseGPX(gpxData);
+                    const { metadataName, waypoints, routePoints, tracks, trackPoints } = parseGPX(gpxData);
+
+                    // Use metadata name or track name for display
+                    if (metadataName) {
+                        document.getElementById('routeName').textContent = metadataName;
+                    } else if (tracks.length > 0 && tracks[0].name) {
+                        document.getElementById('routeName').textContent = tracks[0].name;
+                    }
+
+                    // Determine which points to use for the route line
+                    // Priority: routePoints (rtept) > trackPoints (trkpt)
+                    const displayPoints = routePoints.length > 0 ? routePoints : trackPoints;
 
                     // Update info
                     document.getElementById('waypointCount').textContent = waypoints.length;
-                    document.getElementById('routePointCount').textContent = routePoints.length;
+                    document.getElementById('routePointCount').textContent = displayPoints.length;
 
-                    // Draw route line
-                    if (routePoints.length > 0) {
-                        const routeCoords = routePoints.map(p => [p.lat, p.lon]);
+                    // Draw route/track line
+                    if (displayPoints.length > 0) {
+                        const routeCoords = displayPoints.map(p => [p.lat, p.lon]);
                         routePolyline = L.polyline(routeCoords, {
                             color: '#e74c3c',
                             weight: 4,
@@ -260,16 +296,19 @@
                         }).addTo(map);
 
                         // Calculate and display distance
-                        const distance = getTotalDistance(routePoints);
+                        const distance = getTotalDistance(displayPoints);
                         document.getElementById('distance').textContent = distance.toFixed(2) + ' km';
 
                         // Fit map to route bounds
                         map.fitBounds(routePolyline.getBounds());
                     }
 
+                    // Determine start/end points from waypoints or track/route points
+                    const startEndPoints = waypoints.length > 0 ? waypoints : displayPoints;
+
                     // Add start marker (green)
-                    if (waypoints.length > 0) {
-                        const startPoint = waypoints[0];
+                    if (startEndPoints.length > 0) {
+                        const startPoint = startEndPoints[0];
                         startMarker = L.marker([startPoint.lat, startPoint.lon], {
                             icon: L.icon({
                                 iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
@@ -285,8 +324,8 @@
                     }
 
                     // Add end marker (red)
-                    if (waypoints.length > 1) {
-                        const endPoint = waypoints[waypoints.length - 1];
+                    if (startEndPoints.length > 1) {
+                        const endPoint = startEndPoints[startEndPoints.length - 1];
                         endMarker = L.marker([endPoint.lat, endPoint.lon], {
                             icon: L.icon({
                                 iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
@@ -323,6 +362,22 @@
                 });
         }
 
+        // Get filename from URL hash
+        function getFileFromHash() {
+            const hash = window.location.hash.substring(1); // Remove #
+            if (hash.startsWith('file:')) {
+                return hash.substring(5); // Remove 'file:' prefix
+            }
+            return null;
+        }
+
+        // Update URL hash when file is loaded
+        function updateHash(filename) {
+            if (filename) {
+                window.location.hash = 'file:' + filename;
+            }
+        }
+
         // Load available GPX files and populate selector
         fetch('/api/gpx/list')
             .then(response => response.json())
@@ -343,10 +398,20 @@
                     selector.appendChild(option);
                 });
 
-                // Load the first file by default
+                // Check if there's a file specified in the URL hash
+                const fileFromHash = getFileFromHash();
+                let fileToLoad = fileFromHash || files[0];
+
+                // Verify the file exists in the list
+                if (!files.includes(fileToLoad)) {
+                    fileToLoad = files[0];
+                }
+
+                // Load the selected file
                 if (files.length > 0) {
-                    selector.value = files[0];
-                    loadGPXFile(files[0]);
+                    selector.value = fileToLoad;
+                    loadGPXFile(fileToLoad);
+                    updateHash(fileToLoad);
                 }
             })
             .catch(error => {
@@ -357,6 +422,7 @@
         // Add event listener for file selector
         document.getElementById('fileSelector').addEventListener('change', (e) => {
             loadGPXFile(e.target.value);
+            updateHash(e.target.value);
         });
 
         // Function to update user location on map
@@ -479,6 +545,20 @@
 
         // Add click event to location button
         document.getElementById('locationBtn').addEventListener('click', toggleLocationTracking);
+
+        // Handle URL hash changes
+        window.addEventListener('hashchange', () => {
+            const fileFromHash = getFileFromHash();
+            if (fileFromHash) {
+                const selector = document.getElementById('fileSelector');
+                const availableFiles = Array.from(selector.options).map(option => option.value);
+                
+                if (availableFiles.includes(fileFromHash)) {
+                    selector.value = fileFromHash;
+                    loadGPXFile(fileFromHash);
+                }
+            }
+        });
     </script>
 </body>
 
