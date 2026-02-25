@@ -1,36 +1,42 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GPX Viewer - WNU2026 50K</title>
-    
+
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    
+
+    <script>
+        window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+    </script>
+    <script defer src="/_vercel/insights/script.js"></script>
+
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: Arial, sans-serif;
         }
-        
+
         #header {
             background-color: #2c3e50;
             color: white;
             padding: 15px;
             text-align: center;
         }
-        
+
         #map {
             width: 100%;
             height: calc(100vh - 120px);
         }
-        
+
         #info {
             background-color: #ecf0f1;
             padding: 10px;
@@ -38,30 +44,30 @@
             position: fixed;
             bottom: 0;
             width: 100%;
-            box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
+            box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.1);
         }
-        
+
         .info-item {
             display: inline-block;
             margin: 0 15px;
         }
-        
+
         .info-label {
             font-weight: bold;
             color: #2c3e50;
         }
-        
+
         #locationBtn {
             position: absolute;
             top: 80px;
             right: 10px;
             z-index: 1000;
             background-color: white;
-            border: 2px solid rgba(0,0,0,0.2);
+            border: 2px solid rgba(0, 0, 0, 0.2);
             border-radius: 4px;
             padding: 10px;
             cursor: pointer;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
             font-size: 20px;
             width: 40px;
             height: 40px;
@@ -69,54 +75,55 @@
             align-items: center;
             justify-content: center;
         }
-        
+
         #locationBtn:hover {
             background-color: #f4f4f4;
         }
-        
+
         #locationBtn:active {
             background-color: #e0e0e0;
         }
-        
+
         #locationBtn.active {
             background-color: #3498db;
             color: white;
         }
-        
+
         #fileSelector {
             position: absolute;
             top: 80px;
             left: 10px;
             z-index: 1000;
             background-color: white;
-            border: 2px solid rgba(0,0,0,0.2);
+            border: 2px solid rgba(0, 0, 0, 0.2);
             border-radius: 4px;
             padding: 8px 12px;
             cursor: pointer;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
             font-size: 14px;
             font-family: Arial, sans-serif;
         }
-        
+
         #fileSelector:focus {
             outline: 2px solid #3498db;
         }
     </style>
 </head>
+
 <body>
     <div id="header">
         <h1>🗺️ GPX Viewer</h1>
         <p id="routeName">Select a route</p>
     </div>
-    
+
     <select id="fileSelector">
         <option value="">Loading routes...</option>
     </select>
-    
+
     <button id="locationBtn" title="Show my location">📍</button>
-    
+
     <div id="map"></div>
-    
+
     <div id="info">
         <div class="info-item">
             <span class="info-label">Total Waypoints:</span>
@@ -131,32 +138,32 @@
             <span id="distance">Calculating...</span>
         </div>
     </div>
-    
+
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    
+
     <script>
         // Initialize the map
         const map = L.map('map').setView([13.73, 100.52], 13);
-        
+
         // Add OpenStreetMap tiles
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors',
             maxZoom: 19
         }).addTo(map);
-        
+
         // Variables for user location
         let userLocationMarker = null;
         let userLocationCircle = null;
         let isTrackingLocation = false;
         let watchId = null;
-        
+
         // Variables for map layers
         let routePolyline = null;
         let startMarker = null;
         let endMarker = null;
         let waypointMarkers = [];
-        
+
         // Function to clear existing route from map
         function clearRoute() {
             if (routePolyline) {
@@ -174,12 +181,12 @@
             waypointMarkers.forEach(marker => map.removeLayer(marker));
             waypointMarkers = [];
         }
-        
+
         // Function to parse GPX XML
         function parseGPX(xmlText) {
             const parser = new DOMParser();
             const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
-            
+
             // Get waypoints
             const waypoints = Array.from(xmlDoc.getElementsByTagName('wpt')).map(wpt => ({
                 lat: parseFloat(wpt.getAttribute('lat')),
@@ -187,62 +194,62 @@
                 name: wpt.querySelector('name')?.textContent || '',
                 type: wpt.querySelector('type')?.textContent || ''
             }));
-            
+
             // Get route points
             const routePoints = Array.from(xmlDoc.getElementsByTagName('rtept')).map(rtept => ({
                 lat: parseFloat(rtept.getAttribute('lat')),
                 lon: parseFloat(rtept.getAttribute('lon')),
                 ele: parseFloat(rtept.querySelector('ele')?.textContent || 0)
             }));
-            
+
             return { waypoints, routePoints };
         }
-        
+
         // Calculate distance between two points (Haversine formula)
         function calculateDistance(lat1, lon1, lat2, lon2) {
             const R = 6371; // Earth's radius in km
             const dLat = (lat2 - lat1) * Math.PI / 180;
             const dLon = (lon2 - lon1) * Math.PI / 180;
-            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                      Math.sin(dLon/2) * Math.sin(dLon/2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
             return R * c;
         }
-        
+
         // Calculate total distance
         function getTotalDistance(points) {
             let total = 0;
             for (let i = 1; i < points.length; i++) {
                 total += calculateDistance(
-                    points[i-1].lat, points[i-1].lon,
+                    points[i - 1].lat, points[i - 1].lon,
                     points[i].lat, points[i].lon
                 );
             }
             return total;
         }
-        
+
         // Function to load and display GPX data
         function loadGPXFile(filename) {
             if (!filename) return;
-            
+
             // Clear existing route
             clearRoute();
-            
+
             // Update route name in header
             const routeName = filename.replace('.gpx', '').replace(/-/g, ' ');
             document.getElementById('routeName').textContent = routeName;
-            
+
             // Fetch and display GPX data
             fetch(`/api/gpx/${filename}`)
                 .then(response => response.text())
                 .then(gpxData => {
                     const { waypoints, routePoints } = parseGPX(gpxData);
-                    
+
                     // Update info
                     document.getElementById('waypointCount').textContent = waypoints.length;
                     document.getElementById('routePointCount').textContent = routePoints.length;
-                    
+
                     // Draw route line
                     if (routePoints.length > 0) {
                         const routeCoords = routePoints.map(p => [p.lat, p.lon]);
@@ -251,15 +258,15 @@
                             weight: 4,
                             opacity: 0.7
                         }).addTo(map);
-                        
+
                         // Calculate and display distance
                         const distance = getTotalDistance(routePoints);
                         document.getElementById('distance').textContent = distance.toFixed(2) + ' km';
-                        
+
                         // Fit map to route bounds
                         map.fitBounds(routePolyline.getBounds());
                     }
-                    
+
                     // Add start marker (green)
                     if (waypoints.length > 0) {
                         const startPoint = waypoints[0];
@@ -273,10 +280,10 @@
                                 shadowSize: [41, 41]
                             })
                         })
-                        .bindPopup(`<b>Start: ${startPoint.name || 'Begin'}</b>`)
-                        .addTo(map);
+                            .bindPopup(`<b>Start: ${startPoint.name || 'Begin'}</b>`)
+                            .addTo(map);
                     }
-                    
+
                     // Add end marker (red)
                     if (waypoints.length > 1) {
                         const endPoint = waypoints[waypoints.length - 1];
@@ -290,10 +297,10 @@
                                 shadowSize: [41, 41]
                             })
                         })
-                        .bindPopup(`<b>End: ${endPoint.name || 'End'}</b>`)
-                        .addTo(map);
+                            .bindPopup(`<b>End: ${endPoint.name || 'End'}</b>`)
+                            .addTo(map);
                     }
-                    
+
                     // Add waypoint markers with names (blue)
                     waypoints.filter(wp => wp.name && wp.name.startsWith('Waypoint')).forEach(wp => {
                         const marker = L.circleMarker([wp.lat, wp.lon], {
@@ -304,30 +311,30 @@
                             opacity: 1,
                             fillOpacity: 0.8
                         })
-                        .bindPopup(`<b>${wp.name}</b><br>Type: ${wp.type}`)
-                        .addTo(map);
+                            .bindPopup(`<b>${wp.name}</b><br>Type: ${wp.type}`)
+                            .addTo(map);
                         waypointMarkers.push(marker);
                     });
-                    
+
                 })
                 .catch(error => {
                     console.error('Error loading GPX data:', error);
                     alert('Failed to load GPX file: ' + filename);
                 });
         }
-        
+
         // Load available GPX files and populate selector
         fetch('/api/gpx/list')
             .then(response => response.json())
             .then(files => {
                 const selector = document.getElementById('fileSelector');
                 selector.innerHTML = '';
-                
+
                 if (files.length === 0) {
                     selector.innerHTML = '<option value="">No GPX files found</option>';
                     return;
                 }
-                
+
                 // Add options for each file
                 files.forEach((file, index) => {
                     const option = document.createElement('option');
@@ -335,7 +342,7 @@
                     option.textContent = file.replace('.gpx', '').replace(/-/g, ' ');
                     selector.appendChild(option);
                 });
-                
+
                 // Load the first file by default
                 if (files.length > 0) {
                     selector.value = files[0];
@@ -346,18 +353,18 @@
                 console.error('Error loading file list:', error);
                 alert('Failed to load GPX file list');
             });
-        
+
         // Add event listener for file selector
         document.getElementById('fileSelector').addEventListener('change', (e) => {
             loadGPXFile(e.target.value);
         });
-        
+
         // Function to update user location on map
         function updateUserLocation(position) {
             const lat = position.coords.latitude;
             const lon = position.coords.longitude;
             const accuracy = position.coords.accuracy;
-            
+
             // Remove existing marker and circle
             if (userLocationMarker) {
                 map.removeLayer(userLocationMarker);
@@ -365,7 +372,7 @@
             if (userLocationCircle) {
                 map.removeLayer(userLocationCircle);
             }
-            
+
             // Add accuracy circle
             userLocationCircle = L.circle([lat, lon], {
                 radius: accuracy,
@@ -374,7 +381,7 @@
                 fillOpacity: 0.15,
                 weight: 1
             }).addTo(map);
-            
+
             // Add user location marker
             userLocationMarker = L.marker([lat, lon], {
                 icon: L.icon({
@@ -386,17 +393,17 @@
                     shadowSize: [41, 41]
                 })
             })
-            .bindPopup(`<b>Your Location</b><br>Accuracy: ±${accuracy.toFixed(0)}m`)
-            .addTo(map);
-            
+                .bindPopup(`<b>Your Location</b><br>Accuracy: ±${accuracy.toFixed(0)}m`)
+                .addTo(map);
+
             // Center map on user location
             map.setView([lat, lon], 15);
         }
-        
+
         // Function to handle location error
         function handleLocationError(error) {
             let message = 'Unable to get your location';
-            switch(error.code) {
+            switch (error.code) {
                 case error.PERMISSION_DENIED:
                     message = 'Location permission denied';
                     break;
@@ -409,22 +416,22 @@
             }
             alert(message);
             console.error('Location error:', error);
-            
+
             // Reset button state
             const btn = document.getElementById('locationBtn');
             btn.classList.remove('active');
             isTrackingLocation = false;
         }
-        
+
         // Toggle location tracking
         function toggleLocationTracking() {
             const btn = document.getElementById('locationBtn');
-            
+
             if (!navigator.geolocation) {
                 alert('Geolocation is not supported by your browser');
                 return;
             }
-            
+
             if (isTrackingLocation) {
                 // Stop tracking
                 if (watchId) {
@@ -445,7 +452,7 @@
                 // Start tracking
                 btn.classList.add('active');
                 isTrackingLocation = true;
-                
+
                 // Get current position and watch for changes
                 navigator.geolocation.getCurrentPosition(
                     updateUserLocation,
@@ -456,7 +463,7 @@
                         maximumAge: 0
                     }
                 );
-                
+
                 // Continuously watch position
                 watchId = navigator.geolocation.watchPosition(
                     updateUserLocation,
@@ -469,9 +476,10 @@
                 );
             }
         }
-        
+
         // Add click event to location button
         document.getElementById('locationBtn').addEventListener('click', toggleLocationTracking);
     </script>
 </body>
+
 </html>
