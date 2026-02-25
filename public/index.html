@@ -163,6 +163,7 @@
         let startMarker = null;
         let endMarker = null;
         let waypointMarkers = [];
+        let currentLoadId = 0; // Guard against stale fetch responses
 
         // Function to clear existing route from map
         function clearRoute() {
@@ -180,6 +181,11 @@
             }
             waypointMarkers.forEach(marker => map.removeLayer(marker));
             waypointMarkers = [];
+
+            // Reset info panel
+            document.getElementById('waypointCount').textContent = '-';
+            document.getElementById('routePointCount').textContent = '-';
+            document.getElementById('distance').textContent = 'Calculating...';
         }
 
         // Function to parse GPX XML (supports wpt, rtept, and trkpt formats)
@@ -258,7 +264,8 @@
         function loadGPXFile(filename) {
             if (!filename) return;
 
-            // Clear existing route
+            // Increment load ID and clear previous route immediately
+            const loadId = ++currentLoadId;
             clearRoute();
 
             // Update route name in header
@@ -269,6 +276,8 @@
             fetch(`/api/gpx/${filename}`)
                 .then(response => response.text())
                 .then(gpxData => {
+                    // Discard stale response if user already switched to another route
+                    if (loadId !== currentLoadId) return;
                     const { metadataName, waypoints, routePoints, tracks, trackPoints } = parseGPX(gpxData);
 
                     // Use metadata name or track name for display
