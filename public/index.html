@@ -107,6 +107,33 @@
         #fileSelector:focus {
             outline: 2px solid #3498db;
         }
+
+        #downloadBtn {
+            position: absolute;
+            top: 80px;
+            right: 60px;
+            z-index: 1000;
+            background-color: white;
+            border: 2px solid rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+            padding: 10px;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            font-size: 20px;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #downloadBtn:hover {
+            background-color: #f4f4f4;
+        }
+
+        #downloadBtn:active {
+            background-color: #e0e0e0;
+        }
     </style>
 </head>
 
@@ -120,6 +147,7 @@
         <option value="">Loading routes...</option>
     </select>
 
+    <button id="downloadBtn" title="Download GPX file">⬇️</button>
     <button id="locationBtn" title="Show my location">📍</button>
 
     <div id="map"></div>
@@ -554,6 +582,21 @@
 
         // Add click event to location button
         document.getElementById('locationBtn').addEventListener('click', toggleLocationTracking);
+
+        // Download current GPX file
+        document.getElementById('downloadBtn').addEventListener('click', () => {
+            const filename = document.getElementById('fileSelector').value;
+            if (!filename) {
+                alert('No route selected');
+                return;
+            }
+            const link = document.createElement('a');
+            link.href = `/api/gpx/${filename}`;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
 
         // Handle URL hash changes
         window.addEventListener('hashchange', () => {
