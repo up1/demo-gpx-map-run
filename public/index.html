@@ -180,6 +180,26 @@
             maxZoom: 19
         }).addTo(map);
 
+        // Reusable Leaflet icon factory
+        function createColoredIcon(color) {
+            return L.icon({
+                iconUrl: `https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-${color}.png`,
+                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+                iconSize: [25, 41],
+                iconAnchor: [12, 41],
+                popupAnchor: [1, -34],
+                shadowSize: [41, 41]
+            });
+        }
+
+        const HASH_PREFIX = 'file:';
+        const GEO_OPTIONS = { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 };
+
+        // Format GPX filename into display name
+        function formatRouteName(filename) {
+            return filename.replace('.gpx', '').replace(/-/g, ' ');
+        }
+
         // Variables for user location
         let userLocationMarker = null;
         let userLocationCircle = null;
@@ -265,12 +285,12 @@
         }
 
         // Calculate distance between two points (Haversine formula)
-        function calculateDistance(lat1, lon1, lat2, lon2) {
+        function calculateDistance(p1, p2) {
             const R = 6371; // Earth's radius in km
-            const dLat = (lat2 - lat1) * Math.PI / 180;
-            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const dLat = (p2.lat - p1.lat) * Math.PI / 180;
+            const dLon = (p2.lon - p1.lon) * Math.PI / 180;
             const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.cos(p1.lat * Math.PI / 180) * Math.cos(p2.lat * Math.PI / 180) *
                 Math.sin(dLon / 2) * Math.sin(dLon / 2);
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
             return R * c;
@@ -280,10 +300,7 @@
         function getTotalDistance(points) {
             let total = 0;
             for (let i = 1; i < points.length; i++) {
-                total += calculateDistance(
-                    points[i - 1].lat, points[i - 1].lon,
-                    points[i].lat, points[i].lon
-                );
+                total += calculateDistance(points[i - 1], points[i]);
             }
             return total;
         }
@@ -297,8 +314,7 @@
             clearRoute();
 
             // Update route name in header
-            const routeName = filename.replace('.gpx', '').replace(/-/g, ' ');
-            document.getElementById('routeName').textContent = routeName;
+            document.getElementById('routeName').textContent = formatRouteName(filename);
 
             // Fetch and display GPX data
             fetch(`/api/gpx/${filename}`)
@@ -347,14 +363,7 @@
                     if (startEndPoints.length > 0) {
                         const startPoint = startEndPoints[0];
                         startMarker = L.marker([startPoint.lat, startPoint.lon], {
-                            icon: L.icon({
-                                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
-                                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-                                iconSize: [25, 41],
-                                iconAnchor: [12, 41],
-                                popupAnchor: [1, -34],
-                                shadowSize: [41, 41]
-                            })
+                            icon: createColoredIcon('green')
                         })
                             .bindPopup(`<b>Start: ${startPoint.name || 'Begin'}</b>`)
                             .addTo(map);
@@ -364,14 +373,7 @@
                     if (startEndPoints.length > 1) {
                         const endPoint = startEndPoints[startEndPoints.length - 1];
                         endMarker = L.marker([endPoint.lat, endPoint.lon], {
-                            icon: L.icon({
-                                iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
-                                shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-                                iconSize: [25, 41],
-                                iconAnchor: [12, 41],
-                                popupAnchor: [1, -34],
-                                shadowSize: [41, 41]
-                            })
+                            icon: createColoredIcon('red')
                         })
                             .bindPopup(`<b>End: ${endPoint.name || 'End'}</b>`)
                             .addTo(map);
@@ -402,8 +404,8 @@
         // Get filename from URL hash
         function getFileFromHash() {
             const hash = window.location.hash.substring(1); // Remove #
-            if (hash.startsWith('file:')) {
-                return hash.substring(5); // Remove 'file:' prefix
+            if (hash.startsWith(HASH_PREFIX)) {
+                return hash.substring(HASH_PREFIX.length);
             }
             return null;
         }
@@ -411,7 +413,7 @@
         // Update URL hash when file is loaded
         function updateHash(filename) {
             if (filename) {
-                window.location.hash = 'file:' + filename;
+                window.location.hash = HASH_PREFIX + filename;
             }
         }
 
@@ -431,7 +433,7 @@
                 files.forEach((file, index) => {
                     const option = document.createElement('option');
                     option.value = file;
-                    option.textContent = file.replace('.gpx', '').replace(/-/g, ' ');
+                    option.textContent = formatRouteName(file);
                     selector.appendChild(option);
                 });
 
@@ -445,11 +447,9 @@
                 }
 
                 // Load the selected file
-                if (files.length > 0) {
-                    selector.value = fileToLoad;
-                    loadGPXFile(fileToLoad);
-                    updateHash(fileToLoad);
-                }
+                selector.value = fileToLoad;
+                loadGPXFile(fileToLoad);
+                updateHash(fileToLoad);
             })
             .catch(error => {
                 console.error('Error loading file list:', error);
@@ -467,40 +467,33 @@
             const lat = position.coords.latitude;
             const lon = position.coords.longitude;
             const accuracy = position.coords.accuracy;
+            const latlng = [lat, lon];
 
-            // Remove existing marker and circle
-            if (userLocationMarker) {
-                map.removeLayer(userLocationMarker);
-            }
             if (userLocationCircle) {
-                map.removeLayer(userLocationCircle);
+                userLocationCircle.setLatLng(latlng).setRadius(accuracy);
+            } else {
+                userLocationCircle = L.circle(latlng, {
+                    radius: accuracy,
+                    color: '#3498db',
+                    fillColor: '#3498db',
+                    fillOpacity: 0.15,
+                    weight: 1
+                }).addTo(map);
             }
 
-            // Add accuracy circle
-            userLocationCircle = L.circle([lat, lon], {
-                radius: accuracy,
-                color: '#3498db',
-                fillColor: '#3498db',
-                fillOpacity: 0.15,
-                weight: 1
-            }).addTo(map);
-
-            // Add user location marker
-            userLocationMarker = L.marker([lat, lon], {
-                icon: L.icon({
-                    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
-                    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-                    iconSize: [25, 41],
-                    iconAnchor: [12, 41],
-                    popupAnchor: [1, -34],
-                    shadowSize: [41, 41]
+            if (userLocationMarker) {
+                userLocationMarker.setLatLng(latlng)
+                    .setPopupContent(`<b>Your Location</b><br>Accuracy: ±${accuracy.toFixed(0)}m`);
+            } else {
+                userLocationMarker = L.marker(latlng, {
+                    icon: createColoredIcon('blue')
                 })
-            })
-                .bindPopup(`<b>Your Location</b><br>Accuracy: ±${accuracy.toFixed(0)}m`)
-                .addTo(map);
+                    .bindPopup(`<b>Your Location</b><br>Accuracy: ±${accuracy.toFixed(0)}m`)
+                    .addTo(map);
+            }
 
             // Center map on user location
-            map.setView([lat, lon], 15);
+            map.setView(latlng, 15);
         }
 
         // Function to handle location error
@@ -552,30 +545,14 @@
                 btn.classList.remove('active');
                 isTrackingLocation = false;
             } else {
-                // Start tracking
+                // Start tracking (watchPosition fires immediately with current position)
                 btn.classList.add('active');
                 isTrackingLocation = true;
 
-                // Get current position and watch for changes
-                navigator.geolocation.getCurrentPosition(
-                    updateUserLocation,
-                    handleLocationError,
-                    {
-                        enableHighAccuracy: true,
-                        timeout: 10000,
-                        maximumAge: 0
-                    }
-                );
-
-                // Continuously watch position
                 watchId = navigator.geolocation.watchPosition(
                     updateUserLocation,
                     handleLocationError,
-                    {
-                        enableHighAccuracy: true,
-                        timeout: 10000,
-                        maximumAge: 0
-                    }
+                    GEO_OPTIONS
                 );
             }
         }

@@ -5,6 +5,7 @@ const { DOMParser } = require('@xmldom/xmldom');
 
 const app = express();
 const PORT = 80;
+const GPX_DIR = path.join(__dirname, './gpx_files');
 
 // Serve static files
 app.use(express.static('public'));
@@ -64,10 +65,30 @@ function parseGPXFile(xmlText) {
   };
 }
 
+// Middleware: sanitize :filename param to prevent directory traversal
+function sanitizeFilename(req, res, next) {
+  const filename = req.params.filename;
+  if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+    return res.status(400).json({ error: 'Invalid filename' });
+  }
+  next();
+}
+
+// Helper: read a GPX file and call back with its contents
+function readGPXFile(filename, res, callback) {
+  const gpxPath = path.join(GPX_DIR, filename);
+  fs.readFile(gpxPath, 'utf8', (err, data) => {
+    if (err) {
+      console.error('Error reading GPX file:', err);
+      return res.status(500).json({ error: 'Failed to read GPX file' });
+    }
+    callback(data);
+  });
+}
+
 // API endpoint to list available GPX files
 app.get('/api/gpx/list', (req, res) => {
-  const gpxDir = path.join(__dirname, './gpx_files');
-  fs.readdir(gpxDir, (err, files) => {
+  fs.readdir(GPX_DIR, (err, files) => {
     if (err) {
       console.error('Error reading directory:', err);
       return res.status(500).json({ error: 'Failed to list GPX files' });
@@ -78,38 +99,16 @@ app.get('/api/gpx/list', (req, res) => {
 });
 
 // API endpoint to get raw GPX XML data
-app.get('/api/gpx/:filename', (req, res) => {
-  const filename = req.params.filename;
-  // Sanitize filename to prevent directory traversal
-  if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
-    return res.status(400).json({ error: 'Invalid filename' });
-  }
-  
-  const gpxPath = path.join(__dirname, './gpx_files', filename);
-  fs.readFile(gpxPath, 'utf8', (err, data) => {
-    if (err) {
-      console.error('Error reading GPX file:', err);
-      return res.status(500).json({ error: 'Failed to read GPX file' });
-    }
+app.get('/api/gpx/:filename', sanitizeFilename, (req, res) => {
+  readGPXFile(req.params.filename, res, (data) => {
     res.header('Content-Type', 'application/xml');
     res.send(data);
   });
 });
 
 // API endpoint to get parsed GPX data as JSON
-app.get('/api/gpx/:filename/parsed', (req, res) => {
-  const filename = req.params.filename;
-  // Sanitize filename to prevent directory traversal
-  if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
-    return res.status(400).json({ error: 'Invalid filename' });
-  }
-
-  const gpxPath = path.join(__dirname, './gpx_files', filename);
-  fs.readFile(gpxPath, 'utf8', (err, data) => {
-    if (err) {
-      console.error('Error reading GPX file:', err);
-      return res.status(500).json({ error: 'Failed to read GPX file' });
-    }
+app.get('/api/gpx/:filename/parsed', sanitizeFilename, (req, res) => {
+  readGPXFile(req.params.filename, res, (data) => {
     try {
       const parsed = parseGPXFile(data);
       res.json(parsed);
