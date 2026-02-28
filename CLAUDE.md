@@ -21,10 +21,12 @@ This is a simple Express.js (v5) application with no build tooling:
   - `GET /api/gpx/list` — lists `.gpx` files from `gpx_files/` directory
   - `GET /api/gpx/:filename` — returns raw GPX XML
   - `GET /api/gpx/:filename/parsed` — returns parsed GPX as JSON (uses `@xmldom/xmldom`)
-- **`public/index.html`** — Single-page frontend (all HTML, CSS, and JS in one file). Uses Leaflet.js via CDN. Includes its own client-side GPX parser (browser `DOMParser`) separate from the server-side parser. Features: route selector dropdown, map display, start/end markers, waypoint markers, distance calculation (Haversine), geolocation tracking, GPX file download, URL hash-based route linking (`#file:<filename>`).
+- **`public/index.html`** — HTML structure and external resource references (Leaflet CDN, Vercel Analytics, `styles.css`, `app.js`).
+- **`public/styles.css`** — All CSS styles for the application.
+- **`public/app.js`** — All client-side JavaScript. Uses Leaflet.js via CDN. Includes client-side GPX parser (browser `DOMParser`) separate from the server-side parser. Features: route selector dropdown, map display, start/end markers, waypoint markers, distance calculation (Haversine), geolocation tracking, GPX file download, URL hash-based route linking (`#file:<filename>`).
 - **`gpx_files/`** — Directory containing `.gpx` route files. Add new routes by placing `.gpx` files here.
 
-Note: GPX parsing logic exists in both `server.js` (using `@xmldom/xmldom`) and `public/index.html` (using browser `DOMParser`). The frontend currently fetches raw XML and parses client-side rather than using the `/parsed` endpoint.
+Note: GPX parsing logic exists in both `server.js` (using `@xmldom/xmldom`) and `public/app.js` (using browser `DOMParser`). The frontend currently fetches raw XML and parses client-side rather than using the `/parsed` endpoint.
 
 ## Deployment
 
