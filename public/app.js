@@ -179,6 +179,10 @@ function loadGPXFile(filename) {
                 const distance = getTotalDistance(displayPoints);
                 document.getElementById('distance').textContent = distance.toFixed(2) + ' km';
 
+                // Update route name with distance
+                const currentRouteName = document.getElementById('routeName').textContent;
+                document.getElementById('routeName').textContent = `${currentRouteName} (${distance.toFixed(2)} km)`;
+
                 // Fit map to route bounds
                 map.fitBounds(routePolyline.getBounds());
             }
