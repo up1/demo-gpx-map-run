@@ -4,7 +4,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPX Viewer - WNU2026 50K</title>
+    <title>GPX Viewer</title>
+
+    <!-- PWA -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#2c3e50">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="GPX Viewer">
+    <link rel="apple-touch-icon" href="/icons/icon.svg">
 
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -29,6 +38,13 @@
 
     <button id="downloadBtn" title="Download GPX file">⬇️</button>
     <button id="locationBtn" title="Show my location">📍</button>
+
+    <!-- PWA Install Banner -->
+    <div id="installBanner">
+        <span id="installBannerText">📲 Add GPX Viewer to your home screen</span>
+        <button id="installBtn">Install</button>
+        <button id="dismissInstallBtn" title="Dismiss">✕</button>
+    </div>
 
     <div id="map"></div>
 

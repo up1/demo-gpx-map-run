@@ -406,6 +406,53 @@ document.getElementById('downloadBtn').addEventListener('click', () => {
     document.body.removeChild(link);
 });
 
+// ── PWA: Service Worker Registration ──────────────────────────────────────
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker
+            .register('/sw.js')
+            .catch((err) => console.warn('Service Worker registration failed:', err));
+    });
+}
+
+// ── PWA: Add to Home Screen prompt ─────────────────────────────────────────
+let deferredInstallPrompt = null;
+const installBanner = document.getElementById('installBanner');
+const installBtn = document.getElementById('installBtn');
+const dismissInstallBtn = document.getElementById('dismissInstallBtn');
+
+// Store the deferred prompt and show the banner
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    // Don't show if user already dismissed it this session
+    if (sessionStorage.getItem('installDismissed')) return;
+    installBanner.classList.add('visible');
+});
+
+// Trigger the native install prompt
+installBtn.addEventListener('click', async () => {
+    if (!deferredInstallPrompt) return;
+    installBanner.classList.remove('visible');
+    deferredInstallPrompt.prompt();
+    const { outcome } = await deferredInstallPrompt.userChoice;
+    if (outcome === 'accepted') {
+        deferredInstallPrompt = null;
+    }
+});
+
+// Dismiss the banner without installing
+dismissInstallBtn.addEventListener('click', () => {
+    installBanner.classList.remove('visible');
+    sessionStorage.setItem('installDismissed', '1');
+});
+
+// Hide the banner once the app is installed
+window.addEventListener('appinstalled', () => {
+    installBanner.classList.remove('visible');
+    deferredInstallPrompt = null;
+});
+
 // Handle URL hash changes
 window.addEventListener('hashchange', () => {
     const fileFromHash = getFileFromHash();

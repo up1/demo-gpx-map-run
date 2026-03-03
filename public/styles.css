@@ -117,3 +117,77 @@ body {
 #downloadBtn:active {
     background-color: #e0e0e0;
 }
+
+/* ── PWA Install Banner ───────────────────────────────────────────────────── */
+#installBanner {
+    display: none;
+    position: fixed;
+    bottom: 60px; /* sit above the info bar */
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2000;
+    background-color: #2c3e50;
+    color: white;
+    padding: 12px 16px;
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    align-items: center;
+    gap: 10px;
+    max-width: calc(100vw - 32px);
+    width: max-content;
+    font-size: 14px;
+    font-family: Arial, sans-serif;
+    animation: slideUp 0.3s ease;
+}
+
+#installBanner.visible {
+    display: flex;
+}
+
+#installBannerText {
+    flex: 1;
+    white-space: nowrap;
+}
+
+#installBtn {
+    background-color: #3498db;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 7px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: bold;
+    white-space: nowrap;
+    transition: background-color 0.2s;
+}
+
+#installBtn:hover {
+    background-color: #2980b9;
+}
+
+#dismissInstallBtn {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    font-size: 16px;
+    padding: 0 4px;
+    line-height: 1;
+    transition: color 0.2s;
+}
+
+#dismissInstallBtn:hover {
+    color: white;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
